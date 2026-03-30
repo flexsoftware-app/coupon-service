@@ -14,7 +14,7 @@ W obecnej wersji serwis:
 - pilnuje limitu użyć kuponu,
 - pozwala wykorzystać dany kupon tylko raz na użytkownika,
 - zapisuje dane w PostgreSQL,
-- zawiera testy jednostkowe, webowe i integracyjne.
+- zawiera testy jednostkowe, testy warstwy webowej (`MockMvc`) oraz testy integracyjne.
 
 ## Decyzje techniczne
 
@@ -30,6 +30,17 @@ W obecnej wersji serwis:
 - Dla realizacji kuponu użyta jest blokada pesymistyczna na rekordzie kuponu, żeby ograniczyć problemy przy równoległych żądaniach.
 - Dodatkowo unikalność pary `(coupon_id, user_id)` jest zabezpieczona w bazie danych, więc baza pozostaje ostatecznym mechanizmem ochrony przed duplikatem.
 - Integracja GeoIP jest schowana za prostym portem, żeby dało się ją zamockować w testach i łatwo podmienić dostawcę.
+- Nie rozdzielałem rozwiązania na mikroserwisy, ponieważ domena jest mała, a kluczowy proces realizacji kuponu korzysta ze spójnej, prostej transakcji obejmującej walidację kuponu i zapis użycia. W tym przypadku modularny monolit daje mniejszą złożoność operacyjną i prostsze utrzymanie niż komunikacja między usługami.
+
+## Jak podzieliłbym to na mikroserwisy
+
+Gdyby domena lub skala systemu istotnie urosły, rozważyłbym następujący podział:
+
+- `coupon-service` jako właściciel definicji kuponów: tworzenie kuponów, reguły ważności, limit użyć, ograniczenie do kraju.
+- `redemption-service` jako właściciel historii użyć: rejestracja realizacji kuponów, pilnowanie zasady "jeden użytkownik może użyć kuponu tylko raz", raportowanie wykorzystań.
+- `geoip-service` albo wydzielony komponent infrastrukturalny: mapowanie IP na kraj, cache wyników, retry i izolacja zewnętrznego dostawcy.
+
+Taki podział byłby naturalny, bo oddzielałby definicję kuponu, proces realizacji i integrację z usługą zewnętrzną. Najwcześniej wydzieliłbym GeoIP, ponieważ to najsłabiej powiązana część domeny i jednocześnie jedyne miejsce zależne od zewnętrznego API. Rozdzielenie kuponów i realizacji wprowadzałoby już dodatkową złożoność związaną z utrzymaniem spójności między usługami, dlatego w obecnym zakresie uznałem to za niepotrzebne.
 
 ## Ograniczenia
 
@@ -112,3 +123,32 @@ Na Windows (PowerShell):
 ```powershell
 .\mvnw.cmd test
 ```
+
+## Przykladowe requesty
+
+Ponizej sa dwa przykladowe requesty, ktore pozwalaja szybko sprawdzic dzialanie API z poziomu Postmana lub po eksporcie do `cURL`.
+
+### Utworzenie kuponu
+
+```bash
+curl --location 'http://localhost:8080/api/coupons' \
+--header 'Content-Type: application/json' \
+--data '{
+  "code": "WIOSNA2026",
+  "maxRedemptions": 10,
+  "countryCode": "PL"
+}'
+```
+
+### Realizacja kuponu
+
+```bash
+curl --location 'http://localhost:8080/api/coupons/WIOSNA2026/redemptions' \
+--header 'Content-Type: application/json' \
+--header 'X-Forwarded-For: 83.24.12.10' \
+--data '{
+  "userId": "user-123"
+}'
+```
+
+W lokalnym uruchomieniu naglowek `X-Forwarded-For` jest uwzgledniany, poniewaz aplikacja traktuje adresy loopback (`127.0.0.1`, `::1`) jako zaufane proxy. W środowisku innym niż lokalne analogicznie nalezy skonfigurowac adresy zaufanych proxy przez `security.trusted-proxies` lub zmienna srodowiskowa `TRUSTED_PROXIES`.

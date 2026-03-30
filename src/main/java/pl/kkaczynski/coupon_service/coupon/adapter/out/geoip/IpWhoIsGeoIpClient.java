@@ -1,12 +1,9 @@
 package pl.kkaczynski.coupon_service.coupon.adapter.out.geoip;
 
-import java.time.Duration;
-
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import org.springframework.stereotype.Component;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -19,23 +16,8 @@ public class IpWhoIsGeoIpClient implements GeoIpService {
 
 	private final RestClient restClient;
 
-	public IpWhoIsGeoIpClient(RestClient.Builder restClientBuilder) {
-		this(buildRestClient(restClientBuilder));
-	}
-
-	IpWhoIsGeoIpClient(RestClient restClient) {
+	public IpWhoIsGeoIpClient(RestClient restClient) {
 		this.restClient = restClient;
-	}
-
-	private static RestClient buildRestClient(RestClient.Builder restClientBuilder) {
-		SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-		requestFactory.setConnectTimeout(Duration.ofSeconds(2));
-		requestFactory.setReadTimeout(Duration.ofSeconds(2));
-
-		return restClientBuilder
-				.baseUrl("https://ipwho.is")
-				.requestFactory(requestFactory)
-				.build();
 	}
 
 	@Override
